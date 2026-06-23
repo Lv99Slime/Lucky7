@@ -94,8 +94,11 @@ function testAutoTargetSpecialStillRevealsBeforeSummary() {
   forceTurn(state, "p1");
   Core.hit(state);
   assert.strictEqual(state.phase, "reveal");
-  assert.strictEqual(Core.getPlayer(state, "p1").status, Core.PLAYER_STATUS.FROZEN);
+  assert.strictEqual(state.pendingReveal.card.type, "freeze");
+  assert.strictEqual(Core.getPlayer(state, "p1").status, Core.PLAYER_STATUS.ACTIVE);
+  assert.strictEqual(state.pendingAutoTarget.targetId, "p1");
   Core.continueAfterReveal(state);
+  assert.strictEqual(Core.getPlayer(state, "p1").status, Core.PLAYER_STATUS.FROZEN);
   assert.strictEqual(state.phase, "roundSummary");
 }
 
@@ -187,6 +190,62 @@ function testFlip7EndsRoundAndAddsBonus() {
   assert.strictEqual(state.phase === "roundSummary" || state.phase === "gameOver" || state.phase === "tiebreak", true);
 }
 
+
+function testSingleActiveFreezeTargetsSelf() {
+  const state = newState([card("freeze")]);
+  Core.getPlayer(state, "p2").status = Core.PLAYER_STATUS.STAYED;
+  Core.getPlayer(state, "p3").status = Core.PLAYER_STATUS.BUSTED;
+  forceTurn(state, "p1");
+  Core.hit(state);
+  const player = Core.getPlayer(state, "p1");
+  assert.strictEqual(state.phase, "reveal");
+  assert.strictEqual(state.pendingReveal.card.type, "freeze");
+  assert.strictEqual(player.status, Core.PLAYER_STATUS.ACTIVE);
+  assert.strictEqual(state.pendingTarget, null);
+  assert.strictEqual(state.pendingAutoTarget.targetId, "p1");
+  Core.continueAfterReveal(state);
+  assert.strictEqual(player.status, Core.PLAYER_STATUS.FROZEN);
+}
+
+function testSingleActiveFlipThreeTargetsSelf() {
+  const state = newState([card("flipThree"), card("number", 2), card("number", 3), card("number", 4)]);
+  Core.getPlayer(state, "p2").status = Core.PLAYER_STATUS.STAYED;
+  Core.getPlayer(state, "p3").status = Core.PLAYER_STATUS.BUSTED;
+  forceTurn(state, "p1");
+  Core.hit(state);
+  const player = Core.getPlayer(state, "p1");
+  assert.strictEqual(state.phase, "reveal");
+  assert.strictEqual(state.pendingReveal.card.type, "flipThree");
+  assert.strictEqual(state.pendingTarget, null);
+  assert.strictEqual(state.pendingAutoTarget.targetId, "p1");
+  Core.continueAfterReveal(state);
+  assert.strictEqual(state.flipThree.targetId, "p1");
+  assert.strictEqual(state.pendingReveal.card.value, 2);
+  Core.continueAfterReveal(state);
+  assert.strictEqual(state.pendingReveal.card.value, 3);
+  Core.continueAfterReveal(state);
+  assert.strictEqual(state.pendingReveal.card.value, 4);
+  Core.continueAfterReveal(state);
+  assert.strictEqual(player.numberCards.length, 3);
+}
+
+function testExistingSecondChanceMustGiftOtherPlayer() {
+  const state = newState([card("secondChance")]);
+  const source = Core.getPlayer(state, "p1");
+  const target = Core.getPlayer(state, "p2");
+  source.hasSecondChance = true;
+  Core.getPlayer(state, "p3").hasSecondChance = true;
+  forceTurn(state, "p1");
+  Core.hit(state);
+  assert.strictEqual(state.phase, "reveal");
+  assert.strictEqual(state.pendingTarget.kind, "secondChanceGift");
+  Core.continueAfterReveal(state);
+  assert.strictEqual(state.phase, "selectTarget");
+  assert.deepStrictEqual(Core.legalTargets(state).map((player) => player.id), ["p2"]);
+  Core.chooseTarget(state, "p2");
+  assert.strictEqual(source.hasSecondChance, true);
+  assert.strictEqual(target.hasSecondChance, true);
+}
 function run() {
   [
     testDeckCount,
@@ -199,6 +258,9 @@ function run() {
     testFreezeBanksTarget,
     testFlipThreeStopsOnBust,
     testSecondChanceGiftTargeting,
+    testSingleActiveFreezeTargetsSelf,
+    testSingleActiveFlipThreeTargetsSelf,
+    testExistingSecondChanceMustGiftOtherPlayer,
     testStartNextRoundFromSummary,
     testFlip7EndsRoundAndAddsBonus,
   ].forEach((test) => test());

@@ -96,6 +96,7 @@
       activePlayerIds: safeNames.map((_, index) => `p${index + 1}`),
       initialDeal: null,
       pendingReveal: null,
+      pendingAutoTarget: null,
       pendingTarget: null,
       flipThree: null,
       actionQueue: [],
@@ -239,7 +240,7 @@
   }
 
   function pauseForReveal(state, playerId, card, forcedNextPhase) {
-    const nextPhase = forcedNextPhase || (["selectTarget", "roundSummary", "gameOver", "tiebreak"].includes(state.phase)
+    const nextPhase = forcedNextPhase || (["selectTarget", "autoTarget", "roundSummary", "gameOver", "tiebreak"].includes(state.phase)
       ? state.phase
       : "advanceTurn");
     state.pendingReveal = {
@@ -261,6 +262,12 @@
     }
     if (nextPhase === "flipThreeContinue") {
       continueFlipThree(state);
+      return;
+    }
+    if (nextPhase === "autoTarget") {
+      const pending = state.pendingAutoTarget;
+      state.pendingAutoTarget = null;
+      if (pending) resolveTargetAction(state, pending.targetId, pending.action);
       return;
     }
     state.phase = nextPhase;
@@ -374,7 +381,8 @@
       return;
     }
     if (eligible.length === 1) {
-      resolveTargetAction(state, eligible[0].id, { kind, sourcePlayerId, card, auto: true, context });
+      state.pendingAutoTarget = { targetId: eligible[0].id, action: { kind, sourcePlayerId, card, auto: true, context } };
+      state.phase = "autoTarget";
       return;
     }
     state.pendingTarget = {

@@ -610,6 +610,10 @@
         </div>
       `
     );
+    const backdrop = app.querySelector(".modal-backdrop");
+    backdrop?.addEventListener("click", (event) => {
+      if (event.target === backdrop || event.target.closest('[data-action="close-modal"]')) render();
+    });
   }
 
   function currentPlayer() {
