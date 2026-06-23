@@ -1,5 +1,7 @@
 # Lucky 7 Classroom
 
+Play online: https://lv99slime.github.io/Lucky7/
+
 A private classroom pass-and-play browser game inspired by press-your-luck card play.
 
 This project does not use official Flip 7 artwork, card faces, logos, or branding.

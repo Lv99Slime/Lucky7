@@ -3,10 +3,21 @@
 
   const Core = window.Lucky7Core;
   const app = document.getElementById("app");
+  const avatarChoices = [
+    "\u{1F600}",
+    "\u{1F60E}",
+    "\u{1F913}",
+    "\u{1F9E0}",
+    "\u{1F3B2}",
+    "\u{1F0CF}",
+    "\u{2B50}",
+    "\u{1F525}",
+  ];
   let state = loadState();
   let setup = {
     count: 4,
     names: ["Ada", "Ben", "Chloe", "Derek", "Player 5", "Player 6", "Player 7", "Player 8"],
+    avatars: avatarChoices.slice(),
     target: 200,
     customTarget: 150,
     teacherControls: true,
@@ -65,6 +76,12 @@
   function renderHome() {
     return html`
       <main class="home-screen">
+        <div class="floating-sevens" aria-hidden="true">
+          <span>7</span>
+          <span>7</span>
+          <span>7</span>
+          <span>7</span>
+        </div>
         <section class="hero">
           <div class="brand-row">
             <span class="brand-mark">7</span>
@@ -72,6 +89,11 @@
           </div>
           <h1>Lucky 7 Classroom</h1>
           <p>Private classroom game inspired by press-your-luck card play. No official art, no login, one shared device.</p>
+          <div class="hero-card-fan" aria-hidden="true">
+            <span class="sample-card number">7</span>
+            <span class="sample-card bonus">+10</span>
+            <span class="sample-card action">Freeze</span>
+          </div>
           <div class="hero-actions">
             <button class="primary big" data-action="go-setup">Start</button>
             <button class="secondary big" data-action="continue" ${state || loadState() ? "" : "disabled"}>Continue Last Game</button>
@@ -84,23 +106,33 @@
 
   function renderPlayerSetup() {
     const rows = Array.from({ length: setup.count }, (_, index) => {
+      const selectedAvatar = setup.avatars[index] || avatarChoices[index % avatarChoices.length];
+      const avatarButtons = avatarChoices
+        .map((avatar) => {
+          const selected = avatar === selectedAvatar;
+          return `<button class="avatar-choice ${selected ? "selected" : ""}" data-avatar-index="${index}" data-avatar="${escapeText(avatar)}" aria-label="Player ${index + 1} avatar ${escapeText(avatar)}">${escapeText(avatar)}</button>`;
+        })
+        .join("");
       return html`
-        <label class="field player-name">
-          <span>Player ${index + 1}</span>
-          <input data-name-index="${index}" value="${escapeText(setup.names[index] || `Player ${index + 1}`)}" />
-        </label>
+        <div class="player-name-card">
+          <div class="avatar-picker" role="group" aria-label="Player ${index + 1} avatar">${avatarButtons}</div>
+          <label class="field player-name">
+            <span>Player ${index + 1}</span>
+            <input data-name-index="${index}" value="${escapeText(setup.names[index] || `Player ${index + 1}`)}" />
+          </label>
+        </div>
       `;
     }).join("");
     return html`
       <main class="setup-screen">
-        <header class="screen-header">
-          <button class="icon-button" data-action="home" aria-label="Back">‹</button>
+        <header class="screen-header setup-header">
+          <button class="icon-button" data-action="home" aria-label="Back">Back</button>
           <div>
             <p class="eyebrow">Setup</p>
             <h1>Players</h1>
           </div>
         </header>
-        <section class="panel">
+        <section class="panel setup-panel">
           <label class="field">
             <span>Number of players</span>
             <select data-action="player-count">
@@ -117,24 +149,35 @@
       </main>
     `;
   }
-
   function renderTargetSetup() {
-    const targetOptions = [100, 200, "custom"].map((target) => {
-      const selected = setup.target === target;
-      const label = target === 100 ? "Short 100" : target === 200 ? "Standard 200" : "Custom";
-      return `<button class="choice ${selected ? "selected" : ""}" data-target="${target}">${label}</button>`;
-    }).join("");
+    const options = [
+      { value: 100, icon: "⚡", label: "Short 100", meta: "Fast lesson closer" },
+      { value: 200, icon: "🏆", label: "Standard 200", meta: "Full classroom game" },
+      { value: "custom", icon: "🎯", label: "Custom", meta: `${setup.customTarget || 150} point target` },
+    ];
+    const targetOptions = options
+      .map((option) => {
+        const selected = setup.target === option.value;
+        return html`
+          <button class="choice target-choice ${selected ? "selected" : ""}" data-target="${option.value}">
+            <span class="choice-icon">${escapeText(option.icon)}</span>
+            <strong>${escapeText(option.label)}</strong>
+            <small>${escapeText(option.meta)}</small>
+          </button>
+        `;
+      })
+      .join("");
     return html`
       <main class="setup-screen">
-        <header class="screen-header">
-          <button class="icon-button" data-action="go-setup" aria-label="Back">‹</button>
+        <header class="screen-header setup-header">
+          <button class="icon-button" data-action="go-setup" aria-label="Back">Back</button>
           <div>
             <p class="eyebrow">Setup</p>
             <h1>Target Score</h1>
           </div>
         </header>
-        <section class="panel">
-          <div class="choice-grid">${targetOptions}</div>
+        <section class="panel setup-panel">
+          <div class="choice-grid target-choice-grid">${targetOptions}</div>
           <label class="field ${setup.target === "custom" ? "" : "muted"}">
             <span>Custom target</span>
             <input type="number" min="30" max="999" data-action="custom-target" value="${setup.customTarget}" ${setup.target === "custom" ? "" : "disabled"} />
@@ -148,12 +191,11 @@
       </main>
     `;
   }
-
   function renderRules() {
     return html`
       <main class="setup-screen">
         <header class="screen-header">
-          <button class="icon-button" data-action="home" aria-label="Back">‹</button>
+          <button class="icon-button" data-action="home" aria-label="Back">Back</button>
           <div>
             <p class="eyebrow">Quick rules</p>
             <h1>How It Works</h1>
@@ -186,11 +228,15 @@
       <header class="game-topbar">
         <div>
           <p class="eyebrow">Round ${state.round}</p>
-          <h1>${escapeText(currentPlayer()?.name || "Lucky 7")}</h1>
+          <h1><span class="player-avatar">${escapeText(playerAvatar(currentPlayer()))}</span>${escapeText(currentPlayer()?.name || "Lucky 7")}</h1>
         </div>
         <div class="deck-pill">
           <span>${state.deck.length}</span>
           <small>cards left</small>
+        </div>
+        <div class="target-pill">
+          <span>${state.targetScore}</span>
+          <small>target</small>
         </div>
       </header>
     `;
@@ -204,9 +250,9 @@
         ${renderScoreboard()}
         <section class="pass-panel">
           <p class="eyebrow">Pass device</p>
-          <h2>${escapeText(player?.name || "Next player")}</h2>
-          <p>輪到你。睇清楚名先按，唔好幫隔離位抽爆牌。</p>
-          <button class="primary huge" data-action="begin-turn">Ready</button>
+          <h2><span class="player-avatar big-avatar">${escapeText(playerAvatar(player))}</span>${escapeText(player?.name || "Next player")}</h2>
+          <p>Hand the device to the next player. Tap Ready only when they are looking at the screen.</p>
+          <button class="primary huge ready-button" data-action="begin-turn">Ready</button>
         </section>
         ${renderPublicHands()}
         ${renderUtilityBar()}
@@ -239,7 +285,7 @@
         const isCurrent = player.id === state.currentPlayerId;
         return html`
           <div class="score-chip ${isCurrent ? "current" : ""}">
-            <span>${escapeText(player.name)}</span>
+            <span><b class="score-avatar">${escapeText(playerAvatar(player))}</b>${escapeText(player.name)}</span>
             <strong>${player.totalScore}</strong>
           </div>
         `;
@@ -256,6 +302,8 @@
         <div class="status-row">
           <span class="status ${player.status.toLowerCase()}">${player.status}</span>
           <span>Round score <strong>${player.roundScore}</strong></span>
+          <span>Numbers <strong>${player.numberCards.length}/7</strong></span>
+          <span>Score cards <strong>${player.modifierCards.length}</strong></span>
           ${player.hasSecondChance ? `<span class="second-chance">Second Chance</span>` : ""}
         </div>
         <div class="event-box">${escapeText(state.lastEvent)}</div>
@@ -277,8 +325,8 @@
           <article class="public-hand ${isCurrent ? "current" : ""} ${player.status.toLowerCase()}">
             <header>
               <div>
-                <strong>${escapeText(player.name)}</strong>
-                <span>${player.status} · round ${player.roundScore}</span>
+                <strong><span class="score-avatar">${escapeText(playerAvatar(player))}</span>${escapeText(player.name)}</strong>
+                <span>${player.status} / round ${player.roundScore}</span>
               </div>
               ${player.hasSecondChance ? `<span class="mini-badge">2nd</span>` : ""}
             </header>
@@ -309,16 +357,18 @@
     const reveal = state.pendingReveal;
     const player = reveal ? Core.getPlayer(state, reveal.playerId) : currentPlayer();
     const card = reveal?.card;
+    const isBustReveal = player?.status === Core.PLAYER_STATUS.BUSTED;
     const flipText = state.flipThree ? `Flip Three ${state.flipThree.drawn}/3` : `${player?.name || "Player"} drew`;
     const cardFace = renderDrawnCard(card);
     return html`
-      <main class="game-screen">
+      <main class="game-screen ${isBustReveal ? "bust-screen" : ""}">
         ${renderTopBar()}
         ${renderScoreboard()}
-        <section class="reveal-panel">
+        <section class="reveal-panel ${isBustReveal ? "bust-reveal" : ""}">
           <p class="eyebrow">${escapeText(flipText)}</p>
+          ${isBustReveal ? `<div class="bust-stamp" role="status">BUST</div>` : ""}
           ${cardFace}
-          <p>${escapeText(reveal?.message || state.lastEvent)}</p>
+          <p class="reveal-message">${escapeText(reveal?.message || state.lastEvent)}</p>
           <button class="primary huge" data-action="continue-reveal">Continue</button>
         </section>
         ${renderPublicHands()}
@@ -348,6 +398,18 @@
         <span class="card-name">${escapeText(cardName(card))}</span>
       </div>
     `;
+  }
+
+  function playerAvatar(player) {
+    if (!player) return "7";
+    const index = state?.players ? state.players.indexOf(player) : -1;
+    return player.avatar || avatarChoices[index >= 0 ? index % avatarChoices.length : 0] || "7";
+  }
+
+  function applyAvatars(gameState, avatars) {
+    gameState.players.forEach((player, index) => {
+      player.avatar = avatars[index] || avatarChoices[index % avatarChoices.length];
+    });
   }
 
   function renderCards(cards) {
@@ -403,8 +465,8 @@
       .map((player) => {
         return html`
           <button class="target-button" data-target-player="${player.id}">
-            <strong>${escapeText(player.name)}</strong>
-            <span>${player.roundScore} round pts · ${player.status}</span>
+            <strong><span class="score-avatar">${escapeText(playerAvatar(player))}</span>${escapeText(player.name)}</strong>
+            <span>${player.roundScore} round pts / ${player.status}</span>
           </button>
         `;
       })
@@ -449,7 +511,7 @@
     return html`
       <div class="summary-row">
         <div>
-          <strong>${escapeText(player.name)}</strong>
+          <strong><span class="score-avatar">${escapeText(playerAvatar(player))}</span>${escapeText(player.name)}</strong>
           <span>${escapeText(note)}</span>
         </div>
         <div class="summary-score">
@@ -467,7 +529,7 @@
         <section class="pass-panel">
           <p class="eyebrow">Tiebreak needed</p>
           <h2>${escapeText(names)}</h2>
-          <p>最高分打和。只限平手玩家再玩一 round，唔關事嘅同學可以暫時食花生。</p>
+          <p>The leaders are tied. Play one sudden-death round with only these players.</p>
           <button class="primary huge" data-action="start-tiebreak">Start Tiebreak</button>
         </section>
         ${renderUtilityBar()}
@@ -566,6 +628,12 @@
         setup.names[Number(event.target.dataset.nameIndex)] = event.target.value;
       });
     });
+    app.querySelectorAll("[data-avatar-index]").forEach((button) => {
+      button.addEventListener("click", () => {
+        setup.avatars[Number(button.dataset.avatarIndex)] = button.dataset.avatar;
+        render();
+      });
+    });
     app.querySelectorAll("[data-target]").forEach((button) => {
       button.addEventListener("click", () => {
         setup.target = button.dataset.target === "custom" ? "custom" : Number(button.dataset.target);
@@ -624,10 +692,12 @@
     }
     if (action === "random-names") {
       setup.names = ["Newton", "Gauss", "Ada", "Hypatia", "Noether", "Euler", "Turing", "Emmy"];
+      setup.avatars = ["\u{1F9E0}", "\u{1F4D0}", "\u{1F916}", "\u{2B50}", "\u{1F525}", "\u{1F3B2}", "\u{1F4A1}", "\u{1F0CF}"];
       render();
     }
     if (action === "reset-names") {
       setup.names = Array.from({ length: 8 }, (_, index) => `Player ${index + 1}`);
+      setup.avatars = avatarChoices.slice();
       render();
     }
     if (action === "custom-target") {
@@ -640,6 +710,7 @@
       const target = setup.target === "custom" ? setup.customTarget : setup.target;
       const names = setup.names.slice(0, setup.count);
       state = Core.createGame(names, target, { teacherControls: setup.teacherControls });
+      applyAvatars(state, setup.avatars);
       scoreEditorOpen = false;
       render();
     }
@@ -692,7 +763,9 @@
       }
     }
     if (action === "same-players") {
+      const avatars = state.players.map((player) => player.avatar);
       state = Core.samePlayersNewGame(state);
+      applyAvatars(state, avatars);
       render();
     }
     if (action === "close-modal") {
