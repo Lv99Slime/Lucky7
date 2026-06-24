@@ -14,6 +14,7 @@ The game supports:
 
 - 3-8 players on one shared device
 - Short 100-point games, standard 200-point games, or a custom target
+- Classic and With Vengeance modes
 - Hit / Stay turns
 - Bust detection
 - Second Chance
@@ -21,6 +22,7 @@ The game supports:
 - Flip Three
 - + score cards and x2 score card
 - Lucky 7 bonus for seven different number cards
+- With Vengeance Special Numbers, negative Modifiers, Just One More, Flip Four, Swap, Steal, and Discard
 - Round summaries
 - Tiebreak rounds
 - One-step undo

@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   "use strict";
 
   const Core = window.Lucky7Core;
@@ -20,6 +20,7 @@
     avatars: avatarChoices.slice(),
     target: 200,
     customTarget: 150,
+    mode: "classic",
     teacherControls: true,
   };
   let view = state ? state.phase : "home";
@@ -33,7 +34,7 @@
   function loadState() {
     try {
       const raw = localStorage.getItem(Core.STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
+      return raw ? Core.ensureStateShape(JSON.parse(raw)) : null;
     } catch (error) {
       return null;
     }
@@ -68,6 +69,7 @@
 
   function renderSetupView() {
     if (view === "setup") return renderPlayerSetup();
+    if (view === "mode") return renderModeSetup();
     if (view === "target") return renderTargetSetup();
     if (view === "rules") return renderRules();
     return renderHome();
@@ -144,6 +146,39 @@
             <button class="secondary" data-action="random-names">Random Names</button>
             <button class="secondary" data-action="reset-names">Reset Names</button>
           </div>
+          <button class="primary wide" data-action="go-mode">Next</button>
+        </section>
+      </main>
+    `;
+  }
+  function renderModeSetup() {
+    const modes = [
+      { value: "classic", icon: "7", label: "Classic", meta: "Original classroom rules" },
+      { value: "vengeance", icon: "V", label: "With Vengeance", meta: "New take-that cards" },
+    ];
+    const modeOptions = modes
+      .map((option) => {
+        const selected = setup.mode === option.value;
+        return html`
+          <button class="choice mode-choice ${selected ? "selected" : ""}" data-mode="${option.value}">
+            <span class="choice-icon card-mode-icon">${escapeText(option.icon)}</span>
+            <strong>${escapeText(option.label)}</strong>
+            <small>${escapeText(option.meta)}</small>
+          </button>
+        `;
+      })
+      .join("");
+    return html`
+      <main class="setup-screen">
+        <header class="screen-header setup-header">
+          <button class="icon-button" data-action="go-setup" aria-label="Back">Back</button>
+          <div>
+            <p class="eyebrow">Setup</p>
+            <h1>Game Mode</h1>
+          </div>
+        </header>
+        <section class="panel setup-panel">
+          <div class="choice-grid mode-choice-grid">${modeOptions}</div>
           <button class="primary wide" data-action="go-target">Next</button>
         </section>
       </main>
@@ -151,9 +186,9 @@
   }
   function renderTargetSetup() {
     const options = [
-      { value: 100, icon: "⚡", label: "Short 100", meta: "Fast lesson closer" },
-      { value: 200, icon: "🏆", label: "Standard 200", meta: "Full classroom game" },
-      { value: "custom", icon: "🎯", label: "Custom", meta: `${setup.customTarget || 150} point target` },
+      { value: 100, icon: "100", label: "Short 100", meta: "Fast lesson closer" },
+      { value: 200, icon: "200", label: "Standard 200", meta: "Full classroom game" },
+      { value: "custom", icon: "TGT", label: "Custom", meta: `${setup.customTarget || 150} point target` },
     ];
     const targetOptions = options
       .map((option) => {
@@ -170,7 +205,7 @@
     return html`
       <main class="setup-screen">
         <header class="screen-header setup-header">
-          <button class="icon-button" data-action="go-setup" aria-label="Back">Back</button>
+          <button class="icon-button" data-action="go-mode" aria-label="Back">Back</button>
           <div>
             <p class="eyebrow">Setup</p>
             <h1>Target Score</h1>
@@ -217,6 +252,7 @@
     if (state.phase === "turn") return renderMainGame();
     if (state.phase === "reveal") return renderRevealScreen();
     if (state.phase === "selectTarget") return renderTargetPicker();
+    if (state.phase === "selectCard") return renderCardPicker();
     if (state.phase === "roundSummary") return renderRoundSummary();
     if (state.phase === "tiebreak") return renderTiebreak();
     if (state.phase === "gameOver") return renderGameOver();
@@ -230,13 +266,16 @@
           <p class="eyebrow">Round ${state.round}</p>
           <h1><span class="player-avatar">${escapeText(playerAvatar(currentPlayer()))}</span>${escapeText(currentPlayer()?.name || "Lucky 7")}</h1>
         </div>
-        <div class="deck-pill">
-          <span>${state.deck.length}</span>
-          <small>cards left</small>
-        </div>
-        <div class="target-pill">
-          <span>${state.targetScore}</span>
-          <small>target</small>
+        <div class="topbar-stats">
+          <div class="deck-pill">
+            <span>${state.deck.length}</span>
+            <small>cards left</small>
+          </div>
+          <div class="mode-pill">${escapeText(modeLabel())}</div>
+          <div class="target-pill">
+            <span>${state.targetScore}</span>
+            <small>target</small>
+          </div>
         </div>
       </header>
     `;
@@ -306,7 +345,7 @@
           <span>Score cards <strong>${player.modifierCards.length}</strong></span>
           ${player.hasSecondChance ? `<span class="second-chance">Second Chance</span>` : ""}
         </div>
-        <div class="event-box">${escapeText(state.lastEvent)}</div>
+        <div class="event-box">${escapeText(displayText(state.lastEvent))}</div>
       </section>
     `;
   }
@@ -358,7 +397,7 @@
     const player = reveal ? Core.getPlayer(state, reveal.playerId) : currentPlayer();
     const card = reveal?.card;
     const isBustReveal = player?.status === Core.PLAYER_STATUS.BUSTED;
-    const flipText = state.flipThree ? `Flip Three ${state.flipThree.drawn}/3` : `${player?.name || "Player"} drew`;
+    const flipText = state.flipThree ? `${state.flipThree.kind === "flipFour" ? "Flip Four" : "Flip Three"} ${state.flipThree.drawn}/${state.flipThree.total || 3}` : `${player?.name || "Player"} drew`;
     const cardFace = renderDrawnCard(card);
     return html`
       <main class="game-screen ${isBustReveal ? "bust-screen" : ""}">
@@ -368,7 +407,7 @@
           <p class="eyebrow">${escapeText(flipText)}</p>
           ${isBustReveal ? `<div class="bust-stamp" role="status">BUST</div>` : ""}
           ${cardFace}
-          <p class="reveal-message">${escapeText(reveal?.message || state.lastEvent)}</p>
+          <p class="reveal-message">${escapeText(displayText(reveal?.message || state.lastEvent))}</p>
           <button class="primary huge" data-action="continue-reveal">Continue</button>
         </section>
         ${renderPublicHands()}
@@ -379,9 +418,10 @@
 
   function renderDrawnCard(card) {
     const type = card?.type || "";
-    const label = card?.label || "Card";
-    const isAction = ["freeze", "secondChance", "flipThree"].includes(type);
-    if (!isAction) {
+    const label = cardLabel(card);
+    const isAction = ["freeze", "secondChance", "flipThree", "justOneMore", "swap", "steal", "discard", "flipFour"].includes(type);
+    const isVengeanceModifier = ["minus2", "minus4", "minus6", "minus8", "minus10", "divide2"].includes(type);
+    if (!isAction && !isVengeanceModifier) {
       return html`
         <div class="drawn-card ${cardClass(card)}">
           <span class="card-corner">${escapeText(cardCorner(card))}</span>
@@ -390,16 +430,33 @@
         </div>
       `;
     }
-    const code = type === "freeze" ? "STOP" : type === "secondChance" ? "SAVE" : "THREE";
+    const code = actionCode(card);
     return html`
       <div class="drawn-card action-card ${cardClass(card)}">
-        <span class="action-code">${code}</span>
+        <span class="action-code">${escapeText(code)}</span>
         <strong class="card-value">${escapeText(label)}</strong>
         <span class="card-name">${escapeText(cardName(card))}</span>
       </div>
     `;
   }
+  function modeLabel() {
+    return state?.mode === "vengeance" ? "With Vengeance" : "Classic";
+  }
 
+  function actionCode(card) {
+    const type = card?.type || "";
+    if (type === "freeze") return "STOP";
+    if (type === "secondChance") return "SAVE";
+    if (type === "flipThree") return "THREE";
+    if (type === "justOneMore") return "+1";
+    if (type === "swap") return "SWAP";
+    if (type === "steal") return "TAKE";
+    if (type === "discard") return "DROP";
+    if (type === "flipFour") return "FOUR";
+    if (type === "divide2") return "÷2";
+    if (type && type.startsWith("minus")) return "MOD";
+    return "CARD";
+  }
   function playerAvatar(player) {
     if (!player) return "7";
     const index = state?.players ? state.players.indexOf(player) : -1;
@@ -412,6 +469,16 @@
     });
   }
 
+  function displayText(text) {
+    return String(text || "").replace(/\/2/g, "÷2");
+  }
+
+  function cardLabel(card) {
+    if (!card) return "Card";
+    if (card.type === "divide2") return "÷2";
+    return card.label || "Card";
+  }
+
   function renderCards(cards) {
     if (!cards.length) return `<span class="empty-cards">No cards yet</span>`;
     return cards
@@ -419,7 +486,7 @@
         (card) => html`
           <span class="card ${cardClass(card)}">
             <span class="card-corner">${escapeText(cardCorner(card))}</span>
-            <strong class="card-value">${escapeText(card.label)}</strong>
+            <strong class="card-value">${escapeText(cardLabel(card))}</strong>
             <span class="card-name">${escapeText(cardName(card))}</span>
           </span>
         `
@@ -429,35 +496,49 @@
 
   function cardClass(card) {
     if (!card) return "";
-    const accent = card.type === "number" ? `accent-${Number(card.value || 0) % 6}` : "";
+    const accent = ["number", "zero", "unlucky7", "lucky13"].includes(card.type) ? `accent-${Number(card.value || 0) % 6}` : "";
     return `${card.type || ""} ${accent}`;
   }
 
   function cardCorner(card) {
     if (!card) return "";
     if (card.type === "number") return `No. ${card.value}`;
+    if (card.type === "zero") return "Special";
+    if (card.type === "unlucky7") return "Special";
+    if (card.type === "lucky13") return "Special";
     if (card.type === "plus") return "Bonus";
     if (card.type === "double") return "Double";
     if (card.type === "freeze") return "Action";
     if (card.type === "flipThree") return "Action";
     if (card.type === "secondChance") return "Action";
+    if (["justOneMore", "swap", "steal", "discard", "flipFour"].includes(card.type)) return "Action";
+    if (["minus2", "minus4", "minus6", "minus8", "minus10", "divide2"].includes(card.type)) return "Modifier";
     return "";
   }
 
   function cardName(card) {
     if (!card) return "";
     if (card.type === "number") {
-      const names = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"];
+      const names = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen"];
       return names[Number(card.value)] || "Number";
     }
+    if (card.type === "zero") return "The Zero";
+    if (card.type === "unlucky7") return "Unlucky 7";
+    if (card.type === "lucky13") return "Lucky 13";
     if (card.type === "plus") return `Bonus ${card.value}`;
     if (card.type === "double") return "Double score";
     if (card.type === "freeze") return "Freeze";
     if (card.type === "flipThree") return "Flip three";
     if (card.type === "secondChance") return "Second chance";
+    if (card.type === "justOneMore") return "Just one more";
+    if (card.type === "swap") return "Swap";
+    if (card.type === "steal") return "Steal";
+    if (card.type === "discard") return "Discard";
+    if (card.type === "flipFour") return "Flip four";
+    if (card.type === "divide2") return "Divide by 2";
+    if (card.type && card.type.startsWith("minus")) return `Minus ${card.value}`;
     return card.label || "";
   }
-
   function renderTargetPicker() {
     const targets = Core.legalTargets(state);
     const pending = state.pendingTarget;
@@ -477,7 +558,7 @@
         ${renderScoreboard()}
         <section class="target-panel">
           <p class="eyebrow">Choose target</p>
-          <h2>${escapeText(pending?.message || "Select a player")}</h2>
+          <h2>${escapeText(displayText(pending?.message || "Select a player"))}</h2>
           <div class="target-grid">${buttons}</div>
         </section>
         ${renderPublicHands()}
@@ -486,6 +567,77 @@
     `;
   }
 
+  function renderCardPicker() {
+    const pending = state.pendingCardPick;
+    return html`
+      <main class="game-screen">
+        ${renderTopBar()}
+        ${renderScoreboard()}
+        <section class="target-panel card-picker-panel">
+          <p class="eyebrow">Choose card</p>
+          <h2>${escapeText(displayText(pending?.message || "Select a card"))}</h2>
+        </section>
+        ${renderSelectableHands()}
+        ${renderUtilityBar()}
+      </main>
+    `;
+  }
+
+  function renderSelectableHands() {
+    const legal = Core.legalCardTargets(state);
+    const legalKeys = new Set(legal.map((item) => `${item.playerId}:${item.zone}:${item.cardId}`));
+    const rows = state.players
+      .slice()
+      .sort((a, b) => {
+        if (a.id === state.currentPlayerId) return -1;
+        if (b.id === state.currentPlayerId) return 1;
+        return state.players.indexOf(a) - state.players.indexOf(b);
+      })
+      .map((player) => html`
+        <article class="public-hand selectable ${player.status.toLowerCase()}">
+          <header>
+            <div>
+              <strong><span class="score-avatar">${escapeText(playerAvatar(player))}</span>${escapeText(player.name)}</strong>
+              <span>${player.status} / round ${player.roundScore}</span>
+            </div>
+          </header>
+          <div class="cards-section number-section">
+            <p class="section-label">Numbers ${player.numberCards.length}/7</p>
+            <div class="card-row compact">${renderSelectableCards(player, "numberCards", legalKeys)}</div>
+          </div>
+          <div class="cards-section score-section">
+            <p class="section-label">Score cards</p>
+            <div class="card-row compact">${renderSelectableCards(player, "modifierCards", legalKeys)}</div>
+          </div>
+        </article>
+      `)
+      .join("");
+    return html`
+      <section class="hands-board">
+        <div class="board-title">
+          <p class="eyebrow">Open table</p>
+          <h2>Pick A Face-Up Card</h2>
+        </div>
+        <div class="hands-grid">${rows}</div>
+      </section>
+    `;
+  }
+
+  function renderSelectableCards(player, zone, legalKeys) {
+    const cards = player[zone] || [];
+    if (!cards.length) return `<span class="empty-cards">No cards yet</span>`;
+    return cards
+      .map((card) => {
+        const key = `${player.id}:${zone}:${card.id}`;
+        const enabled = legalKeys.has(key);
+        return html`
+          <button class="card-pick ${enabled ? "legal" : ""}" data-card-player="${player.id}" data-card-zone="${zone}" data-card-id="${card.id}" ${enabled ? "" : "disabled"}>
+            ${renderCards([card])}
+          </button>
+        `;
+      })
+      .join("");
+  }
   function renderRoundSummary() {
     const rows = state.players.map((player) => renderSummaryRow(player)).join("");
     return html`
@@ -644,9 +796,21 @@
         render();
       });
     });
+    app.querySelectorAll("[data-mode]").forEach((button) => {
+      button.addEventListener("click", () => {
+        setup.mode = button.dataset.mode === "vengeance" ? "vengeance" : "classic";
+        render();
+      });
+    });
     app.querySelectorAll("[data-target-player]").forEach((button) => {
       button.addEventListener("click", () => {
         Core.chooseTarget(state, button.dataset.targetPlayer);
+        render();
+      });
+    });
+    app.querySelectorAll("[data-card-id]").forEach((button) => {
+      button.addEventListener("click", () => {
+        Core.chooseCard(state, button.dataset.cardPlayer, button.dataset.cardZone, button.dataset.cardId);
         render();
       });
     });
@@ -657,7 +821,6 @@
       });
     });
   }
-
   function handleAction(event) {
     const action = event.currentTarget.dataset.action;
     if (event.type === "input" && action !== "custom-target") return;
@@ -672,6 +835,10 @@
     if (action === "go-setup") {
       view = "setup";
       state = null;
+      render();
+    }
+    if (action === "go-mode") {
+      view = "mode";
       render();
     }
     if (action === "go-target") {
@@ -713,7 +880,7 @@
     if (action === "start-game") {
       const target = setup.target === "custom" ? setup.customTarget : setup.target;
       const names = setup.names.slice(0, setup.count);
-      state = Core.createGame(names, target, { teacherControls: setup.teacherControls });
+      state = Core.createGame(names, target, { teacherControls: setup.teacherControls, mode: setup.mode });
       applyAvatars(state, setup.avatars);
       scoreEditorOpen = false;
       render();
@@ -780,13 +947,19 @@
   function renderRulesBody() {
     return html`
       <div class="rules-list">
-        <p>Hit draws one card. Stay banks your current round score.</p>
-        <p>Duplicate number means bust unless Second Chance removes that duplicate.</p>
-        <p>Freeze banks a target. Flip Three forces up to three cards. Seven unique number cards gives +15 and ends the round.</p>
+        ${state?.mode === "vengeance" ? html`
+          <p>With Vengeance adds Special Numbers, negative Modifiers, and take-that Actions.</p>
+          <p>Actions and Modifiers can target any player who has not busted, including players who stayed.</p>
+          <p>The Zero scores 0 unless you Flip 7. Unlucky 7 clears your other cards. Lucky 13 lets you hold one extra 13.</p>
+          <p>Just One More forces one card and a Stay. Flip Four draws up to four cards, then resolves queued Actions and Modifiers.</p>
+        ` : html`
+          <p>Hit draws one card. Stay banks your current round score.</p>
+          <p>Duplicate number means bust unless Second Chance removes that duplicate.</p>
+          <p>Freeze banks a target. Flip Three forces up to three cards. Seven unique number cards gives +15 and ends the round.</p>
+        `}
       </div>
     `;
   }
-
   function renderLogBody() {
     const entries = (state?.log || [])
       .map((entry) => `<li><span>R${entry.round}</span> ${escapeText(entry.message)}</li>`)

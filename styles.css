@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Nunito:wght@500;700;900&display=swap");
+﻿@import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Nunito:wght@500;700;900&display=swap");
 
 :root {
   color-scheme: light;
@@ -335,7 +335,7 @@ h2 {
 .screen-header,
 .game-topbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) minmax(168px, auto);
   align-items: end;
   gap: 10px;
   width: 100%;
@@ -351,6 +351,20 @@ h2 {
 .screen-header {
   grid-template-columns: auto minmax(0, 1fr);
 }
+
+.topbar-stats {
+  display: grid;
+  grid-template-columns: minmax(86px, auto) auto;
+  gap: 8px;
+  justify-self: end;
+  align-self: stretch;
+  align-content: end;
+}
+
+.topbar-stats .target-pill {
+  grid-column: 1 / -1;
+}
+
 
 .screen-header h1,
 .game-topbar h1 {
@@ -942,13 +956,67 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.drawn-card.action-card.minus2 .card-value,
+.drawn-card.action-card.minus4 .card-value,
+.drawn-card.action-card.minus6 .card-value,
+.drawn-card.action-card.minus8 .card-value,
+.drawn-card.action-card.minus10 .card-value,
+.drawn-card.action-card.divide2 .card-value {
+  justify-self: center;
+  align-self: center;
+  width: 100%;
+  max-width: 100%;
+  text-align: center;
+  font-size: clamp(58px, 15vw, 86px);
+  line-height: 1;
+  overflow-wrap: normal;
+}
+
+.drawn-card.action-card.justOneMore .card-value,
+.drawn-card.action-card.swap .card-value,
+.drawn-card.action-card.steal .card-value,
+.drawn-card.action-card.discard .card-value,
+.drawn-card.action-card.flipFour .card-value {
+  justify-self: center;
+  align-self: center;
+  width: 100%;
+  max-width: 100%;
+  text-align: center;
+  font-size: clamp(38px, 9vw, 62px);
+  line-height: 0.94;
+  overflow-wrap: anywhere;
+}
+
+.drawn-card.action-card.justOneMore .card-value {
+  font-size: clamp(30px, 7vw, 48px);
+}
+
+.drawn-card.action-card.minus2 .action-code,
+.drawn-card.action-card.minus4 .action-code,
+.drawn-card.action-card.minus6 .action-code,
+.drawn-card.action-card.minus8 .action-code,
+.drawn-card.action-card.minus10 .action-code,
+.drawn-card.action-card.divide2 .action-code,
+.drawn-card.action-card.minus2 .card-name,
+.drawn-card.action-card.minus4 .card-name,
+.drawn-card.action-card.minus6 .card-name,
+.drawn-card.action-card.minus8 .card-name,
+.drawn-card.action-card.minus10 .card-name,
+.drawn-card.action-card.divide2 .card-name {
+  justify-self: start;
+}
+
 .action-code {
   display: inline-grid;
+  place-items: center;
   min-width: 58px;
   min-height: 30px;
+  padding: 0 8px;
   border: 2px solid currentColor;
   color: var(--card-accent, var(--ink));
   font-size: 13px;
+  line-height: 1;
+  text-align: center;
 }
 
 .target-panel {
@@ -1148,11 +1216,19 @@ h2 {
 
 @media (max-width: 560px) {
   .game-topbar {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(118px, auto);
   }
 
-  .target-pill {
-    grid-column: 2;
+  .topbar-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-stats .target-pill {
+    grid-column: auto;
+  }
+
+  .mode-pill {
+    min-width: 0;
   }
 
   .choice-grid,
@@ -1452,12 +1528,15 @@ button:active::after {
 .target-choice .choice-icon {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   border: 2px solid var(--strong-line);
   border-radius: 999px;
   background: #fff2c6;
-  font-size: 25px;
+  font-family: var(--font-game);
+  font-size: 22px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .target-choice strong {
@@ -1751,5 +1830,166 @@ button:active::after {
   }
   100% {
     opacity: 0.38;
+  }
+}
+/* With Vengeance extension */
+.mode-pill {
+  display: inline-grid;
+  place-items: center;
+  min-height: 44px;
+  max-width: 132px;
+  border: 2px solid var(--strong-line);
+  border-radius: var(--radius);
+  padding: 7px 10px;
+  background: #fff2c6;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.05;
+  text-align: center;
+  text-transform: uppercase;
+  box-shadow: 0 3px 0 var(--strong-line);
+}
+
+.mode-choice-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mode-choice {
+  min-height: 132px;
+  display: grid;
+  justify-items: start;
+  align-content: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.card-mode-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 60px;
+  border: 2px solid currentColor;
+  border-radius: 8px;
+  background: #fffaf0;
+  color: var(--red);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 30px;
+  box-shadow: 0 3px 0 var(--strong-line);
+}
+
+.card.zero,
+.drawn-card.zero {
+  --card-accent: #30363d;
+  background-image: url("assets/cards/vengeance-zero.png");
+}
+
+.card.zero .card-value,
+.drawn-card.zero .card-value {
+  visibility: hidden;
+}
+
+.card.unlucky7,
+.drawn-card.unlucky7 {
+  --card-accent: var(--violet);
+  background-image: url("assets/cards/vengeance-unlucky7.png");
+}
+
+.card.lucky13,
+.drawn-card.lucky13 {
+  --card-accent: var(--gold);
+  background-image: url("assets/cards/vengeance-lucky13.png");
+}
+
+.card.minus2,
+.card.minus4,
+.card.minus6,
+.card.minus8,
+.card.minus10,
+.drawn-card.minus2,
+.drawn-card.minus4,
+.drawn-card.minus6,
+.drawn-card.minus8,
+.drawn-card.minus10 {
+  --card-accent: var(--red);
+  background-image: url("assets/cards/vengeance-modifier-minus.png");
+}
+
+.card.divide2,
+.drawn-card.divide2 {
+  --card-accent: var(--blue);
+  background-image: url("assets/cards/vengeance-modifier-divide.png");
+}
+
+.card.justOneMore,
+.drawn-card.justOneMore {
+  --card-accent: var(--green);
+  background-image: url("assets/cards/vengeance-just-one-more.png");
+}
+
+.card.swap,
+.drawn-card.swap {
+  --card-accent: var(--teal);
+  background-image: url("assets/cards/vengeance-swap.png");
+}
+
+.card.steal,
+.drawn-card.steal {
+  --card-accent: var(--orange);
+  background-image: url("assets/cards/vengeance-steal.png");
+}
+
+.card.discard,
+.drawn-card.discard {
+  --card-accent: #3d4a4a;
+  background-image: url("assets/cards/vengeance-discard.png");
+}
+
+.card.flipFour,
+.drawn-card.flipFour {
+  --card-accent: var(--gold);
+  background-image: url("assets/cards/vengeance-flip-four.png");
+}
+
+.card-pick {
+  flex: 0 0 auto;
+  min-height: auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.card-pick .card {
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.card-pick.legal:hover .card {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 0 var(--strong-line), 0 0 0 4px rgba(217, 154, 34, 0.34);
+}
+
+.card-pick:disabled {
+  opacity: 0.35;
+  filter: grayscale(0.55);
+}
+
+.card-picker-panel h2 {
+  font-size: clamp(26px, 5vw, 42px);
+}
+
+.public-hand.selectable .card-row {
+  overflow: visible;
+}
+
+@media (max-width: 700px) {
+  .mode-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mode-pill {
+    grid-column: span 2;
+    justify-self: end;
   }
 }

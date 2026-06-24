@@ -1,12 +1,12 @@
-const assert = require("assert");
+﻿const assert = require("assert");
 const Core = require("../game-core");
 
 function card(type, value) {
   return { id: `${type}-${value}-${Math.random()}`, type, value, label: type === "number" ? String(value) : type === "plus" ? `+${value}` : type === "double" ? "x2" : type };
 }
 
-function newState(deck, names = ["A", "B", "C"]) {
-  const state = Core.createGame(names, 200, { teacherControls: true });
+function newState(deck, names = ["A", "B", "C"], options = {}) {
+  const state = Core.createGame(names, 200, { teacherControls: true, mode: options.mode });
   state.deck = deck.slice();
   state.discard = [];
   state.log = [];
@@ -26,6 +26,10 @@ function newState(deck, names = ["A", "B", "C"]) {
     player.roundNote = "";
   });
   return state;
+}
+
+function newVengeanceState(deck, names = ["A", "B", "C"]) {
+  return newState(deck, names, { mode: "vengeance" });
 }
 
 function forceTurn(state, playerId) {
@@ -246,9 +250,163 @@ function testExistingSecondChanceMustGiftOtherPlayer() {
   assert.strictEqual(source.hasSecondChance, true);
   assert.strictEqual(target.hasSecondChance, true);
 }
+function testVengeanceDeckCount() {
+  const deck = Core.createDeck("vengeance");
+  assert.strictEqual(deck.length, 108);
+  assert.strictEqual(deck.filter((c) => c.type === "number").length, 89);
+  for (let value = 1; value <= 13; value += 1) {
+    const expected = value - (value === 7 || value === 13 ? 1 : 0);
+    assert.strictEqual(deck.filter((c) => c.type === "number" && c.value === value).length, expected);
+  }
+  assert.strictEqual(deck.filter((c) => ["zero", "unlucky7", "lucky13"].includes(c.type)).length, 3);
+  assert.strictEqual(deck.filter((c) => ["minus2", "minus4", "minus6", "minus8", "minus10", "divide2"].includes(c.type)).length, 6);
+  assert.strictEqual(deck.filter((c) => ["justOneMore", "swap", "steal", "discard", "flipFour"].includes(c.type)).length, 10);
+}
+
+function testVengeanceScoreModifiersAndZero() {
+  const player = {
+    status: Core.PLAYER_STATUS.ACTIVE,
+    flip7: false,
+    numberCards: [card("number", 10), card("number", 9)],
+    modifierCards: [card("divide2", 2), card("minus4", 4)],
+  };
+  assert.strictEqual(Core.calculateRoundScore(player), 5);
+  player.numberCards.push(card("zero", 0));
+  assert.strictEqual(Core.calculateRoundScore(player), 0);
+  player.flip7 = true;
+  assert.strictEqual(Core.calculateRoundScore(player), 20);
+}
+
+function testVengeanceUnlucky7ClearsCards() {
+  const state = newVengeanceState([card("unlucky7", 7)]);
+  const player = Core.getPlayer(state, "p1");
+  player.numberCards = [card("number", 3), card("number", 5)];
+  player.modifierCards = [card("minus4", 4)];
+  forceTurn(state, "p1");
+  Core.hit(state);
+  assert.strictEqual(state.phase, "reveal");
+  assert.strictEqual(player.status, Core.PLAYER_STATUS.ACTIVE);
+  assert.strictEqual(player.numberCards.length, 1);
+  assert.strictEqual(player.numberCards[0].type, "unlucky7");
+  assert.strictEqual(player.modifierCards.length, 0);
+  assert.strictEqual(state.discard.length, 3);
+}
+
+function testVengeanceLucky13AllowsSecondOnly() {
+  const state = newVengeanceState([card("lucky13", 13), card("number", 13)]);
+  const player = Core.getPlayer(state, "p1");
+  player.numberCards = [card("number", 13)];
+  forceTurn(state, "p1");
+  Core.hit(state);
+  assert.strictEqual(player.status, Core.PLAYER_STATUS.ACTIVE);
+  assert.strictEqual(player.numberCards.length, 2);
+  Core.continueAfterReveal(state);
+  forceTurn(state, "p1");
+  Core.hit(state);
+  assert.strictEqual(player.status, Core.PLAYER_STATUS.BUSTED);
+}
+
+function testVengeanceModifierCanTargetStayedPlayer() {
+  const state = newVengeanceState([card("minus4", 4)]);
+  Core.getPlayer(state, "p2").status = Core.PLAYER_STATUS.STAYED;
+  forceTurn(state, "p1");
+  Core.hit(state);
+  assert.strictEqual(state.phase, "reveal");
+  Core.continueAfterReveal(state);
+  assert.strictEqual(state.phase, "selectTarget");
+  assert.ok(Core.legalTargets(state).some((player) => player.id === "p2"));
+  Core.chooseTarget(state, "p2");
+  assert.strictEqual(Core.getPlayer(state, "p2").modifierCards.length, 1);
+}
+
+function testVengeanceOnlyNonBustedAutoTargetsSelf() {
+  const state = newVengeanceState([card("minus8", 8)]);
+  Core.getPlayer(state, "p2").status = Core.PLAYER_STATUS.BUSTED;
+  Core.getPlayer(state, "p3").status = Core.PLAYER_STATUS.BUSTED;
+  forceTurn(state, "p1");
+  Core.hit(state);
+  assert.strictEqual(state.phase, "reveal");
+  assert.strictEqual(state.pendingAutoTarget.targetId, "p1");
+  Core.continueAfterReveal(state);
+  assert.strictEqual(Core.getPlayer(state, "p1").modifierCards.length, 1);
+}
+
+function testVengeanceJustOneMoreForcesStay() {
+  const state = newVengeanceState([card("justOneMore"), card("number", 5)]);
+  forceTurn(state, "p1");
+  Core.hit(state);
+  Core.continueAfterReveal(state);
+  assert.strictEqual(state.phase, "selectTarget");
+  Core.chooseTarget(state, "p2");
+  assert.strictEqual(state.phase, "reveal");
+  assert.strictEqual(state.pendingReveal.card.value, 5);
+  Core.continueAfterReveal(state);
+  const target = Core.getPlayer(state, "p2");
+  assert.strictEqual(target.status, Core.PLAYER_STATUS.STAYED);
+  assert.strictEqual(target.numberCards.length, 1);
+}
+
+function testVengeanceFlipFourQueuesModifier() {
+  const state = newVengeanceState([card("flipFour"), card("number", 1), card("minus2", 2), card("number", 2), card("number", 3)]);
+  forceTurn(state, "p1");
+  Core.hit(state);
+  Core.continueAfterReveal(state);
+  Core.chooseTarget(state, "p2");
+  assert.strictEqual(state.phase, "reveal");
+  assert.strictEqual(state.pendingReveal.card.value, 1);
+  Core.continueAfterReveal(state);
+  assert.strictEqual(state.pendingReveal.card.type, "minus2");
+  Core.continueAfterReveal(state);
+  assert.strictEqual(state.pendingReveal.card.value, 2);
+  Core.continueAfterReveal(state);
+  assert.strictEqual(state.pendingReveal.card.value, 3);
+  Core.continueAfterReveal(state);
+  assert.strictEqual(state.phase, "selectTarget");
+  assert.strictEqual(state.pendingTarget.kind, "modifier");
+  Core.chooseTarget(state, "p2");
+  assert.strictEqual(Core.getPlayer(state, "p2").modifierCards.length, 1);
+}
+
+function testVengeanceStealDiscardAndSwap() {
+  const stealState = newVengeanceState([card("steal")]);
+  Core.getPlayer(stealState, "p2").numberCards = [card("number", 9)];
+  forceTurn(stealState, "p1");
+  Core.hit(stealState);
+  Core.continueAfterReveal(stealState);
+  assert.strictEqual(stealState.phase, "selectCard");
+  const stealTarget = Core.legalCardTargets(stealState)[0];
+  Core.chooseCard(stealState, stealTarget.playerId, stealTarget.zone, stealTarget.cardId);
+  assert.strictEqual(Core.getPlayer(stealState, "p1").numberCards.some((c) => c.value === 9), true);
+  assert.strictEqual(Core.getPlayer(stealState, "p2").numberCards.length, 0);
+
+  const discardState = newVengeanceState([card("discard")]);
+  Core.getPlayer(discardState, "p2").numberCards = [card("number", 4)];
+  forceTurn(discardState, "p1");
+  Core.hit(discardState);
+  Core.continueAfterReveal(discardState);
+  const discardTarget = Core.legalCardTargets(discardState)[0];
+  Core.chooseCard(discardState, discardTarget.playerId, discardTarget.zone, discardTarget.cardId);
+  assert.strictEqual(Core.getPlayer(discardState, "p2").numberCards.length, 0);
+  assert.notStrictEqual(discardState.phase, "selectCard");
+  assert.strictEqual(discardState.pendingCardPick, null);
+
+  const swapState = newVengeanceState([card("swap")]);
+  Core.getPlayer(swapState, "p1").numberCards = [card("number", 1)];
+  Core.getPlayer(swapState, "p2").numberCards = [card("number", 8)];
+  forceTurn(swapState, "p1");
+  Core.hit(swapState);
+  Core.continueAfterReveal(swapState);
+  const first = Core.legalCardTargets(swapState).find((item) => item.playerId === "p1");
+  Core.chooseCard(swapState, first.playerId, first.zone, first.cardId);
+  const second = Core.legalCardTargets(swapState).find((item) => item.playerId === "p2");
+  Core.chooseCard(swapState, second.playerId, second.zone, second.cardId);
+  assert.strictEqual(Core.getPlayer(swapState, "p1").numberCards[0].value, 8);
+  assert.strictEqual(Core.getPlayer(swapState, "p2").numberCards[0].value, 1);
+}
 function run() {
   [
     testDeckCount,
+    testVengeanceDeckCount,
     testBustWithoutSecondChance,
     testSecondChancePreventsBust,
     testHitWaitsForRevealBeforeNextPlayer,
@@ -263,6 +421,14 @@ function run() {
     testExistingSecondChanceMustGiftOtherPlayer,
     testStartNextRoundFromSummary,
     testFlip7EndsRoundAndAddsBonus,
+    testVengeanceScoreModifiersAndZero,
+    testVengeanceUnlucky7ClearsCards,
+    testVengeanceLucky13AllowsSecondOnly,
+    testVengeanceModifierCanTargetStayedPlayer,
+    testVengeanceOnlyNonBustedAutoTargetsSelf,
+    testVengeanceJustOneMoreForcesStay,
+    testVengeanceFlipFourQueuesModifier,
+    testVengeanceStealDiscardAndSwap,
   ].forEach((test) => test());
   console.log("All Lucky 7 core tests passed.");
 }
